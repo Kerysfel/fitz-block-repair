@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "textblock-clustering"
+version = "0.1.0"
+description = "Minimal text span clustering for PyMuPDF"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["pymupdf"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
