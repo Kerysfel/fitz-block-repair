@@ -9,6 +9,27 @@ description = "Minimal text span clustering for PyMuPDF"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["pymupdf"]
+license = {file = "LICENSE"}
+authors = [{name = "Vershinin Vladislav", email = "vershinin@itmo.ru"}]
+keywords = ["pymupdf", "pdf", "text", "clustering", "layout", "document", "extraction"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Text Processing",
+]
+
+[project.urls]
+Homepage = "https://github.com/Kerysfel/fitz-block-repair"
+Repository = "https://github.com/Kerysfel/fitz-block-repair"
+Issues = "https://github.com/Kerysfel/fitz-block-repair/issues"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
