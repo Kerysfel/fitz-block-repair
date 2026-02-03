@@ -12,6 +12,7 @@ from .constants import (
     FAKE_UNDERLINE_FONT_NAME,
     FAKE_UNDERLINE_FONT_SIZE_PT,
     FAKE_UNDERLINE_Y_PAD_PX,
+    LINE_GAP_HEIGHT_MULTIPLIER,
     OVERLAP_THRESHOLD_DEFAULT,
     SHORT_SPAN_LIMIT_DEFAULT,
     BFS_VERTICAL_TOLERANCE,
@@ -374,7 +375,13 @@ class TextClustering:
                 (x0j, y0j, x1j, y1j) = (bbox_j.left, bbox_j.top, bbox_j.right, bbox_j.bottom)
                 center_j = centers[j]
 
-                is_same_block = self.euclid_dist(center_i, center_j) < distance_threshold
+                height_i = y1i - y0i
+                height_j = y1j - y0j
+                max_height = max(height_i, height_j)
+                max_line_gap = max(distance_vertical, max_height * LINE_GAP_HEIGHT_MULTIPLIER)
+
+                vertical_gap = max(0.0, max(y0i, y0j) - min(y1i, y1j))
+                is_same_block = self.euclid_dist(center_i, center_j) < distance_threshold and vertical_gap <= max_line_gap
 
                 if not is_same_block:
                     yi_mid = (y0i + y1i) / 2.0
