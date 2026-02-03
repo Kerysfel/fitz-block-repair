@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import re
 
 DISTANCE_THRESHOLD_DEFAULT: float = 65.0

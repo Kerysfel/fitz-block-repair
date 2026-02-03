@@ -13,6 +13,15 @@ from textblock_clustering.constants import (
 
 
 def main() -> int:
+    """
+    Run a small CLI demo that clusters text spans on the first PDF page.
+
+    Args:
+        None.
+
+    Returns:
+        Process exit code, where 0 indicates success.
+    """
     parser = argparse.ArgumentParser(description='Cluster text spans on the first page of a PDF.')
     parser.add_argument('pdf_path', help='Path to a PDF file')
     args = parser.parse_args()

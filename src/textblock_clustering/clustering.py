@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import copy
 import math
 import re
@@ -24,21 +22,54 @@ from .constants import (
     UNDERLINE_PIXELS_PER_CHAR,
 )
 from .exceptions import EmptyPDFError
+from .structures import Point, RawDrawingDict, RawTextDict, Rect
 from .types import BoundingBox, Span, Block, FontStyle
 from .watermark import make_watermark_span_filter
 
 
 class TextClustering:
     def __init__(self, page: fitz.Page) -> None:
+        """
+        Initialize the clustering helper for a single PDF page.
+
+        Args:
+            page: PyMuPDF page to extract spans and drawings from.
+
+        Returns:
+            None.
+        """
         self.page: fitz.Page = page
         self.spans: list[Span] = self.extract_spans()
-        self.drawings: list[dict] = page.get_drawings()  # type: ignore
+        self.drawings: list[RawDrawingDict] = page.get_drawings()  # type: ignore
 
     @staticmethod
-    def euclid_dist(p1: tuple[float, float], p2: tuple[float, float]) -> float:
+    def euclid_dist(p1: Point, p2: Point) -> float:
+        """
+        Compute the Euclidean distance between two points.
+
+        Args:
+            p1: First point as (x, y).
+            p2: Second point as (x, y).
+
+        Returns:
+            The Euclidean distance between the points.
+        """
         return math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
 
     def maybe_join_text(self, prev_text: str, next_text: str) -> str:
+        """
+        Join two text fragments using simple language-aware heuristics.
+
+        Args:
+            prev_text: Existing accumulated text.
+            next_text: Next fragment to append.
+
+        Returns:
+            The merged text with appropriate spacing.
+
+        Fallbacks:
+            Returns next_text when prev_text is empty; returns prev_text when next_text is empty.
+        """
         if not prev_text:
             return next_text
 
@@ -70,14 +101,41 @@ class TextClustering:
     def inject_missing_underscores(
         self,
         text_blocks: list[Block],
-        drawings: list[dict],
+        drawings: list[RawDrawingDict],
         y_tolerance: float = DRAWING_Y_TOLERANCE_PX,
         min_length: float = DRAWING_MIN_LENGTH_PX,
     ) -> list[Block]:
+        """
+        Inject synthetic underscore spans where signature lines are detected.
+
+        Args:
+            text_blocks: Existing clustered text blocks.
+            drawings: Drawing objects from the page.
+            y_tolerance: Vertical tolerance for detecting horizontal lines.
+            min_length: Minimum line length to be considered an underline.
+
+        Returns:
+            Updated list of blocks with synthetic underscore spans appended.
+
+        Fallbacks:
+            Returns the original blocks when no eligible lines are found.
+        """
         u: re.Pattern = re.compile(rf'_{(UNDERLINE_MIN_SEGMENTS,)}|_(?:\s*_){(3,)}')
 
-        def collect_horizontal_lines(draws: list[dict]) -> list[tuple[float, float, float, float]]:
-            lines: list[tuple[float, float, float, float]] = []
+        def collect_horizontal_lines(draws: list[RawDrawingDict]) -> list[Rect]:
+            """
+            Extract horizontal line segments from drawing instructions.
+
+            Args:
+                draws: Drawing dictionaries from PyMuPDF.
+
+            Returns:
+                A list of line segments as (x0, y0, x1, y1).
+
+            Fallbacks:
+                Returns an empty list when no segments match.
+            """
+            lines: list[Rect] = []
             for d in draws:
                 r = d.get('rect')
                 if r is not None:
@@ -97,9 +155,18 @@ class TextClustering:
             return lines
 
         def mid_y(bbox: BoundingBox) -> float:
+            """
+            Compute the vertical midpoint of a bounding box.
+
+            Args:
+                bbox: Bounding box instance.
+
+            Returns:
+                The midpoint Y coordinate.
+            """
             return (bbox.top + bbox.bottom) / 2.0
 
-        lines: list[tuple[float, float, float, float]] = collect_horizontal_lines(drawings)
+        lines: list[Rect] = collect_horizontal_lines(drawings)
         if not lines:
             return text_blocks
 
@@ -124,7 +191,7 @@ class TextClustering:
             if already:
                 continue
 
-            candidate: tuple[float, float, float, float] | None = None
+            candidate: Rect | None = None
             y_tol = SIGN_SAME_LINE_Y_TOL_PX
             for x0, y0, x1, y1 in lines:
                 overlaps_vertically: bool = not (
@@ -159,10 +226,22 @@ class TextClustering:
         return new_blocks
 
     def extract_spans(self, page: fitz.Page | None = None) -> list[Span]:
+        """
+        Extract and normalize text spans from a page, skipping watermark spans.
+
+        Args:
+            page: Optional page override; defaults to the instance page.
+
+        Returns:
+            A list of normalized text spans.
+
+        Fallbacks:
+            Returns an empty list when no text spans are found.
+        """
         target_page: fitz.Page = page if page is not None else self.page
         skip_wm = make_watermark_span_filter(target_page, use_color_hint=False, external_links_only=True)
 
-        data = target_page.get_text('dict')
+        data: RawTextDict = target_page.get_text('dict')
         result: list[Span] = []
 
         for block in data.get('blocks', []):  # type: ignore
@@ -196,13 +275,44 @@ class TextClustering:
         return result
 
     def merge_short_spans(self, items: list[Span], short_span_limit: int) -> list[Span]:
+        """
+        Merge adjacent short spans to reduce fragmentation.
+
+        Args:
+            items: Input spans to merge.
+            short_span_limit: Minimum length for a span to remain separate.
+
+        Returns:
+            A list of spans with short neighbors merged.
+
+        Fallbacks:
+            Returns an empty list when input is empty.
+        """
         if not items:
             return []
 
         def only_underscores(text: str) -> bool:
+            """
+            Check whether the text contains only underscore characters.
+
+            Args:
+                text: Input string.
+
+            Returns:
+                True when the string is composed entirely of underscores.
+            """
             return re.fullmatch(r'_+', text) is not None
 
         def only_dashes(text: str) -> bool:
+            """
+            Check whether the text contains only dash characters.
+
+            Args:
+                text: Input string.
+
+            Returns:
+                True when the string is composed entirely of dash characters.
+            """
             return re.fullmatch(r'[\u2013\u2014-]+', text) is not None
 
         merged: list[Span] = [copy.copy(items[0])]
@@ -231,13 +341,28 @@ class TextClustering:
         overlap_threshold: float,
         short_span_limit: int,
     ) -> list[Block]:
+        """
+        Cluster text spans using a BFS over a proximity graph.
+
+        Args:
+            distance_threshold: Euclidean distance threshold for direct neighbors.
+            distance_vertical: Vertical tolerance for line-based adjacency.
+            overlap_threshold: Horizontal overlap/gap tolerance for line adjacency.
+            short_span_limit: Minimum length for a span to remain separate.
+
+        Returns:
+            A list of clustered text blocks.
+
+        Raises:
+            EmptyPDFError: When no text spans are available on the page.
+        """
         spans: list[Span] = self.spans
         n = len(spans)
         if not spans:
             raise EmptyPDFError('Empty PDF page: no text spans found.')
 
         adjacency: list[list[int]] = [[] for _ in range(n)]
-        centers: list[tuple[float, float]] = [span.bbox.center for span in spans]
+        centers: list[Point] = [span.bbox.center for span in spans]
 
         for i in range(n):
             bbox_i = spans[i].bbox
@@ -330,6 +455,23 @@ class TextClustering:
         overlap_threshold: float = OVERLAP_THRESHOLD_DEFAULT,
         short_span_limit: int = SHORT_SPAN_LIMIT_DEFAULT,
     ) -> list[Block]:
+        """
+        Convenience method to cluster spans directly from a PDF file.
+
+        Args:
+            pdf_path: Path to the PDF file.
+            page_number: Zero-based page index to cluster.
+            distance_threshold: Euclidean distance threshold for direct neighbors.
+            distance_vertical: Vertical tolerance for line-based adjacency.
+            overlap_threshold: Horizontal overlap/gap tolerance for line adjacency.
+            short_span_limit: Minimum length for a span to remain separate.
+
+        Returns:
+            A list of clustered text blocks for the requested page.
+
+        Raises:
+            FileNotFoundError: When the PDF is empty or missing.
+        """
         with fitz.open(pdf_path) as doc:
             if not doc.page_count:
                 raise FileNotFoundError(f'Empty or missing PDF: {pdf_path}')
